@@ -30,7 +30,7 @@ app  = Flask(__name__)
 CORS(app)
 @app.route("/")
 def home():
-    return render_templates("index.html")
+    return render_template("index.html")
 MODEL_PATH = "trained_models.pkl"
 
 # In-memory cache for live feed
