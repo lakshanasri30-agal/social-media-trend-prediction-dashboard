@@ -4,7 +4,7 @@
 =============================================================
 """
 
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 import numpy as np
 import pandas as pd
@@ -30,8 +30,7 @@ app  = Flask(__name__)
 CORS(app)
 @app.route("/")
 def home():
-    return "Social Media Trend Prediction API is Live 🚀"
-
+    return render_template("index.html")
 MODEL_PATH = "trained_models.pkl"
 
 # In-memory cache for live feed
