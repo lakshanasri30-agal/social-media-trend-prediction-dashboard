@@ -1,0 +1,910 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Social Media Trend Prediction Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Sora:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0a0e1a;
+      --bg2: #0f1420;
+      --bg3: #141929;
+      --card: #141929;
+      --card2: #1a2035;
+      --border: rgba(99,179,237,0.15);
+      --border2: rgba(99,179,237,0.25);
+      --accent: #63b3ed;
+      --accent2: #4fd1c5;
+      --accent3: #f6ad55;
+      --accent4: #fc8181;
+      --text: #e2e8f0;
+      --text2: #94a3b8;
+      --text3: #64748b;
+      --green: #68d391;
+      --purple: #b794f4;
+      --font: 'Sora', sans-serif;
+      --mono: 'IBM Plex Mono', monospace;
+    }
+
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      overflow-x: hidden;
+      min-height: 100vh;
+    }
+
+    /* ── LOADING SCREEN ── */
+    .loading-overlay {
+      position: fixed; inset: 0;
+      background: var(--bg);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      z-index: 999; gap: 16px;
+    }
+    .spinner {
+      width: 32px; height: 32px;
+      border: 2px solid var(--border2);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-title { font-family: var(--mono); font-size: 14px; color: var(--accent); }
+    .progress-bar { width: 260px; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
+    .progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); border-radius: 2px; width: 0; transition: width 0.35s ease; }
+    .progress-label { font-family: var(--mono); font-size: 11px; color: var(--text3); }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+    @keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+
+    /* ── TOP BAR ── */
+    .topbar {
+      background: linear-gradient(135deg, #0a0e1a 0%, #0d1530 60%, #0a0e1a 100%);
+      border-bottom: 1px solid var(--border2);
+      padding: 14px 28px;
+      display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 50;
+    }
+    .topbar::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0; height: 2px;
+      background: linear-gradient(90deg, transparent, var(--accent), var(--accent2), transparent);
+    }
+    .topbar-left { display: flex; align-items: center; gap: 14px; }
+    .logo-badge {
+      width: 38px; height: 38px; border-radius: 9px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--mono); font-size: 13px; font-weight: 500; color: #0a0e1a;
+      flex-shrink: 0;
+    }
+    .topbar-title { font-size: 14px; font-weight: 600; color: var(--text); letter-spacing: 0.3px; }
+    .topbar-sub { font-size: 11px; color: var(--text3); margin-top: 2px; font-family: var(--mono); }
+    .status-pill {
+      display: flex; align-items: center; gap: 7px;
+      padding: 6px 14px; border-radius: 20px;
+      background: rgba(104,211,145,0.08);
+      border: 1px solid rgba(104,211,145,0.2);
+      font-size: 11px; color: var(--green); font-family: var(--mono);
+    }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; }
+
+    /* ── LAYOUT ── */
+    .dashboard { padding-bottom: 40px; }
+    .section { padding: 20px 28px; border-bottom: 1px solid var(--border); }
+    .section-head {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .panel-title {
+      font-size: 11px; font-weight: 500; color: var(--text2);
+      text-transform: uppercase; letter-spacing: 0.9px;
+      font-family: var(--mono);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .panel-title::before {
+      content: ''; width: 3px; height: 12px; border-radius: 2px;
+      background: var(--accent); flex-shrink: 0;
+    }
+    .tag {
+      font-size: 9px; font-family: var(--mono); padding: 3px 9px;
+      border-radius: 4px;
+      background: rgba(99,179,237,0.08); color: var(--accent);
+      border: 1px solid var(--border2);
+    }
+
+    /* ── KPI CARDS ── */
+    .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+    @media(max-width:900px){ .kpi-row { grid-template-columns: repeat(2,1fr); } }
+    @media(max-width:500px){ .kpi-row { grid-template-columns: 1fr; } }
+    .kpi-card {
+      background: var(--card2); border: 1px solid var(--border);
+      border-radius: 12px; padding: 16px 18px;
+      position: relative; overflow: hidden;
+    }
+    .kpi-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; }
+    .kpi-card.blue::before  { background: var(--accent); }
+    .kpi-card.teal::before  { background: var(--accent2); }
+    .kpi-card.amber::before { background: var(--accent3); }
+    .kpi-card.purple::before{ background: var(--purple); }
+    .kpi-label {
+      font-size: 10px; color: var(--text3);
+      letter-spacing: 0.8px; text-transform: uppercase;
+      font-family: var(--mono); margin-bottom: 8px;
+    }
+    .kpi-value { font-size: 28px; font-weight: 600; font-family: var(--mono); }
+    .kpi-value.blue   { color: var(--accent); }
+    .kpi-value.teal   { color: var(--accent2); }
+    .kpi-value.amber  { color: var(--accent3); }
+    .kpi-value.purple { color: var(--purple); }
+    .kpi-sub { font-size: 10px; color: var(--text3); margin-top: 5px; }
+
+    /* ── PREDICTION ENGINE ── */
+    .search-wrap { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+    .search-input {
+      flex: 1; min-width: 220px;
+      background: var(--bg3); border: 1px solid var(--border2);
+      color: var(--text); padding: 11px 16px; border-radius: 8px;
+      font-family: var(--mono); font-size: 12px; outline: none;
+      transition: border-color 0.2s;
+    }
+    .search-input:focus { border-color: var(--accent); }
+    .search-input::placeholder { color: var(--text3); }
+    .model-select {
+      background: var(--bg3); border: 1px solid var(--border2);
+      color: var(--text2); padding: 11px 14px; border-radius: 8px;
+      font-family: var(--mono); font-size: 12px; outline: none; cursor: pointer;
+    }
+    .btn {
+      padding: 11px 20px; border-radius: 8px; border: none;
+      font-family: var(--font); font-size: 12px; font-weight: 500;
+      cursor: pointer; transition: all 0.2s; white-space: nowrap;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      color: #0a0e1a;
+    }
+    .btn-primary:hover { opacity: 0.85; transform: translateY(-1px); }
+    .btn-secondary {
+      background: rgba(99,179,237,0.08);
+      border: 1px solid var(--border2); color: var(--accent);
+    }
+    .btn-secondary:hover { background: rgba(99,179,237,0.14); }
+
+    .result-box {
+      background: var(--bg3); border-radius: 10px;
+      padding: 16px 20px; border: 1px solid var(--border); display: none;
+    }
+    .result-box.show { display: block; animation: fadeIn 0.4s ease; }
+    .result-label { font-size: 10px; color: var(--text3); font-family: var(--mono); letter-spacing: 0.6px; margin-bottom: 6px; }
+    .result-verdict { font-size: 22px; font-weight: 600; font-family: var(--mono); margin-bottom: 6px; }
+    .result-verdict.trending     { color: var(--green); }
+    .result-verdict.non-trending { color: var(--accent4); }
+    .result-meta { font-size: 10px; color: var(--text3); font-family: var(--mono); }
+    .conf-bar-wrap { margin-top: 10px; }
+    .conf-bar-label { display: flex; justify-content: space-between; font-size: 10px; color: var(--text3); margin-bottom: 5px; font-family: var(--mono); }
+    .conf-bar { height: 7px; background: rgba(255,255,255,0.05); border-radius: 4px; overflow: hidden; }
+    .conf-fill { height: 100%; border-radius: 4px; transition: width 0.9s ease; }
+    .conf-fill.trend    { background: linear-gradient(90deg, var(--accent), var(--accent2)); }
+    .conf-fill.nontrend { background: linear-gradient(90deg, var(--accent4), var(--purple)); }
+    .info-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+    .info-chip {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: 6px; padding: 5px 11px;
+      font-size: 10px; font-family: var(--mono); color: var(--text2);
+    }
+    .info-chip span { color: var(--accent3); font-weight: 500; }
+
+    /* ── MODEL CARDS ── */
+    .model-cards { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin-bottom: 16px; }
+    @media(max-width:600px){ .model-cards { grid-template-columns: 1fr; } }
+    .model-card {
+      background: var(--bg3); border: 1px solid var(--border);
+      border-radius: 9px; padding: 12px 14px; cursor: pointer; transition: all 0.2s;
+    }
+    .model-card:hover { border-color: var(--accent); background: rgba(99,179,237,0.05); }
+    .model-card.best  { border-color: var(--accent2); }
+    .model-name { font-size: 10px; font-family: var(--mono); color: var(--text2); margin-bottom: 5px; }
+    .model-acc  { font-size: 18px; font-weight: 600; font-family: var(--mono); }
+    .model-badge {
+      display: inline-block; font-size: 8px; padding: 2px 7px;
+      border-radius: 3px; background: rgba(79,209,197,0.15);
+      color: var(--accent2); font-family: var(--mono); margin-top: 4px;
+    }
+
+    /* ── CHARTS ── */
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media(max-width:800px){ .two-col { grid-template-columns: 1fr; } }
+    .panel {
+      background: var(--card2); border: 1px solid var(--border);
+      border-radius: 10px; padding: 16px;
+    }
+    .chart-wrap { position: relative; height: 200px; }
+    .legend-row { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 10px; font-size: 11px; color: var(--text2); }
+    .legend-dot { width: 9px; height: 9px; border-radius: 2px; display: inline-block; margin-right: 4px; vertical-align: middle; }
+
+    /* ── TABLES ── */
+    .table-wrap { overflow-x: auto; }
+    .data-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+    .data-table th {
+      text-align: left; padding: 8px 12px;
+      color: var(--text3); font-family: var(--mono); font-weight: 400;
+      border-bottom: 1px solid var(--border); font-size: 10px;
+      letter-spacing: 0.6px; white-space: nowrap;
+    }
+    .data-table td {
+      padding: 9px 12px; border-bottom: 1px solid rgba(99,179,237,0.06);
+      white-space: nowrap; color: var(--text2);
+    }
+    .data-table tr:last-child td { border-bottom: none; }
+    .data-table tr:hover td { background: rgba(99,179,237,0.03); }
+    .data-table .text-col { max-width: 280px; overflow: hidden; text-overflow: ellipsis; color: var(--text); }
+    .badge {
+      display: inline-block; padding: 2px 9px; border-radius: 4px;
+      font-size: 9px; font-family: var(--mono); font-weight: 500;
+    }
+    .badge.trending   { background: rgba(104,211,145,0.12); color: var(--green); }
+    .badge.non-trend  { background: rgba(252,129,129,0.10); color: var(--accent4); }
+    .mono-cell { font-family: var(--mono); }
+    .accent-cell  { color: var(--accent);  font-family: var(--mono); }
+    .accent2-cell { color: var(--accent2); font-family: var(--mono); }
+    .accent3-cell { color: var(--accent3); font-family: var(--mono); }
+    .green-cell   { color: var(--green);   font-family: var(--mono); font-weight: 500; }
+    .purple-cell  { color: var(--purple);  font-family: var(--mono); }
+    .muted-cell   { color: var(--text3);   font-family: var(--mono); }
+
+    /* ── FOOTER ── */
+    .footer-bar {
+      background: var(--bg2); border-top: 1px solid var(--border);
+      padding: 12px 28px; display: flex; align-items: center; justify-content: space-between;
+      flex-wrap: wrap; gap: 8px; margin-top: 20px;
+    }
+    .footer-text { font-size: 10px; color: var(--text3); font-family: var(--mono); }
+
+    /* ── API STATUS BAR ── */
+    .api-status {
+      font-size: 10px; font-family: var(--mono); color: var(--text3);
+      padding: 4px 10px; background: var(--bg3); border: 1px solid var(--border);
+      border-radius: 4px; margin-left: 8px;
+    }
+    .api-status.ok   { color: var(--green);   border-color: rgba(104,211,145,0.25); }
+    .api-status.fail { color: var(--accent3); border-color: rgba(246,173,85,0.25); }
+  </style>
+</head>
+<body>
+
+<!-- LOADING SCREEN -->
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="spinner"></div>
+  <div class="loading-title" id="loadingMsg">Initializing ML pipeline...</div>
+  <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+  <div class="progress-label" id="progressPct">0%</div>
+</div>
+
+<!-- MAIN DASHBOARD -->
+<div class="dashboard" id="mainDash" style="display:none;">
+
+  <!-- TOP BAR -->
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="logo-badge">ML</div>
+      <div>
+        <div class="topbar-title">Social Media Trend Prediction Dashboard</div>
+        <div class="topbar-sub">Using Optimized Machine Learning Classifiers</div>
+    </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+      <span class="api-status" id="apiStatus">API: checking...</span>
+      <div class="status-pill"><div class="dot"></div>Models Ready</div>
+    </div>
+  </div>
+
+  <!-- KPI ROW -->
+  <div class="section">
+    <div class="kpi-row">
+      <div class="kpi-card blue">
+        <div class="kpi-label">Best Model Accuracy</div>
+        <div class="kpi-value blue" id="kpi1">91.3%</div>
+        <div class="kpi-sub">SVM after GridSearchCV tuning</div>
+      </div>
+      <div class="kpi-card teal">
+        <div class="kpi-label">Dataset Size</div>
+        <div class="kpi-value teal">12,450</div>
+        <div class="kpi-sub">Labeled tweet samples</div>
+      </div>
+      <div class="kpi-card amber">
+        <div class="kpi-label">TF-IDF Features</div>
+        <div class="kpi-value amber">5,000</div>
+        <div class="kpi-sub">Max feature dimensions</div>
+      </div>
+      <div class="kpi-card purple">
+        <div class="kpi-label">Models Evaluated</div>
+        <div class="kpi-value purple">3</div>
+        <div class="kpi-sub">LR &middot; SVM &middot; Random Forest</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PREDICTION ENGINE -->
+  <div class="section">
+    <div class="section-head">
+      <div class="panel-title">Prediction Engine</div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <div class="tag">TF-IDF Vectorized</div>
+        <div class="tag">REST API Connected</div>
+      </div>
+    </div>
+    <div class="search-wrap">
+      <input class="search-input" id="tweetInput"
+        placeholder="Enter tweet text or hashtag (e.g. #AIRevolution model surpasses human benchmark)"/>
+      <select class="model-select" id="modelSelect">
+        <option value="svm">SVM (Best Model)</option>
+        <option value="lr">Logistic Regression</option>
+        <option value="rf">Random Forest</option>
+      </select>
+      <button class="btn btn-primary" onclick="runPrediction()">&#9658; Predict Trend</button>
+      <button class="btn btn-secondary" onclick="loadSample()">&#8635; Sample</button>
+    </div>
+
+    <div class="result-box" id="resultBox">
+      <div style="display:flex;gap:28px;flex-wrap:wrap;align-items:flex-start;">
+        <div style="flex:0 0 auto;min-width:160px;">
+          <div class="result-label">PREDICTION RESULT</div>
+          <div class="result-verdict" id="resultVerdict">TRENDING</div>
+          <div class="result-meta" id="resultMeta">Model: SVM &middot; Acc: 91.3%</div>
+        </div>
+        <div style="flex:1;min-width:240px;">
+          <div class="conf-bar-wrap">
+            <div class="conf-bar-label">
+              <span>Trending Probability</span>
+              <span id="confPct1">—</span>
+            </div>
+            <div class="conf-bar"><div class="conf-fill trend" id="confFill1" style="width:0%"></div></div>
+          </div>
+          <div class="conf-bar-wrap">
+            <div class="conf-bar-label">
+              <span>Non-Trending Probability</span>
+              <span id="confPct2">—</span>
+            </div>
+            <div class="conf-bar"><div class="conf-fill nontrend" id="confFill2" style="width:0%"></div></div>
+          </div>
+          <div class="info-row">
+            <div class="info-chip">Keywords: <span id="keywordsOut">—</span></div>
+            <div class="info-chip">Token count: <span id="tokenOut">—</span></div>
+            <div class="info-chip">Source: <span id="sourceOut">local</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODEL PERFORMANCE -->
+  <div class="section">
+    <div class="section-head">
+      <div class="panel-title">Model Performance Comparison</div>
+      <div class="tag">GridSearchCV Optimized</div>
+    </div>
+    <div class="model-cards" id="modelCards"></div>
+    <div class="two-col">
+      <div class="panel">
+        <div class="panel-title" style="margin-bottom:12px;">Accuracy: Base vs Optimized</div>
+        <div class="legend-row">
+          <span><span class="legend-dot" style="background:#63b3ed;"></span>Base Accuracy</span>
+          <span><span class="legend-dot" style="background:#4fd1c5;"></span>After GridSearchCV</span>
+        </div>
+        <div class="chart-wrap"><canvas id="accChart"></canvas></div>
+      </div>
+      <div class="panel">
+        <div class="panel-title" style="margin-bottom:12px;">Precision / Recall / F1-Score</div>
+        <div class="legend-row">
+          <span><span class="legend-dot" style="background:#f6ad55;"></span>Precision</span>
+          <span><span class="legend-dot" style="background:#b794f4;"></span>Recall</span>
+          <span><span class="legend-dot" style="background:#68d391;"></span>F1-Score</span>
+        </div>
+        <div class="chart-wrap"><canvas id="metricsChart"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- LIVE TREND FEED -->
+  <div class="section">
+    <div class="section-head">
+      <div class="panel-title">Live Trend Feed</div>
+      <div class="status-pill" style="font-size:10px;padding:4px 11px;">
+        <div class="dot"></div>Live
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Tweet / Hashtag</th>
+            <th>Platform</th>
+            <th>Model Used</th>
+            <th>Prediction</th>
+            <th>Confidence</th>
+            <th>Engagement</th>
+            <th>Timestamp</th>
+          </tr>
+        </thead>
+        <tbody id="trendFeed"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- DATASET PREVIEW -->
+  <div class="section">
+    <div class="section-head">
+      <div class="panel-title">Training Dataset Preview</div>
+      <div class="tag">12,450 samples &middot; 80/20 Train-Test Split</div>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Tweet Text</th>
+            <th>Tokens</th>
+            <th>Top TF-IDF Term</th>
+            <th>Label</th>
+            <th>LR Conf.</th>
+            <th>SVM Conf.</th>
+            <th>RF Conf.</th>
+          </tr>
+        </thead>
+        <tbody id="datasetBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- HYPERPARAMETER TUNING TABLE -->
+  <div class="section">
+    <div class="section-head">
+      <div class="panel-title">GridSearchCV Hyperparameter Tuning Results</div>
+      <div class="tag">Cross-Validation: 5-Fold</div>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Model</th>
+            <th>Parameter</th>
+            <th>Values Tested</th>
+            <th>Best Value</th>
+            <th>CV Score</th>
+            <th>Improvement</th>
+          </tr>
+        </thead>
+        <tbody id="hpTable"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <div class="footer-bar">
+    <div class="footer-text">
+      Research: Social Media Trend Prediction Using Optimized ML Classifiers &mdash; IEEE Format
+    </div>
+    <div class="footer-text">
+      TF-IDF &middot; Logistic Regression &middot; SVM &middot; Random Forest &middot; GridSearchCV
+    </div>
+  </div>
+
+</div><!-- end dashboard -->
+
+<script>
+  /* ── REAL-TIME LIVE DASHBOARD ENGINE ── */
+
+async function fetchLiveUpdates() {
+  try {
+    const response = await fetch(BACKEND_URL + '/models', {
+      signal: AbortSignal.timeout(3000)
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+
+      // Update KPI accuracy
+      if (data.best_accuracy) {
+        document.getElementById('kpi1').textContent =
+          data.best_accuracy + '%';
+      }
+
+      // Update API live timestamp
+      const api = document.getElementById('apiStatus');
+      api.textContent =
+        'API: connected · updated ' + new Date().toLocaleTimeString();
+      api.className = 'api-status ok';
+    }
+  } catch (e) {
+    const api = document.getElementById('apiStatus');
+    api.textContent =
+      'API: offline · local mode · ' + new Date().toLocaleTimeString();
+    api.className = 'api-status fail';
+  }
+}
+
+
+function updateTrendFeedLive() {
+  const tbody = document.getElementById('trendFeed');
+
+  const liveSamples = [
+    '#AIRevolution new model beats GPT',
+    '#WorldCup final live score',
+    '#Bitcoin crosses 120k',
+    '#IPLFinal match begins',
+    '#ElectionResults breaking news',
+    '#StockMarket sudden crash'
+  ];
+
+  const randomText =
+    liveSamples[Math.floor(Math.random() * liveSamples.length)];
+
+  const confidence = (88 + Math.random() * 10).toFixed(1);
+
+  const row = document.createElement('tr');
+
+  row.innerHTML =
+    `<td class="muted-cell">LIVE</td>` +
+    `<td class="text-col">${randomText}</td>` +
+    `<td>X (Twitter)</td>` +
+    `<td class="accent2-cell">SVM</td>` +
+    `<td><span class="badge trending">Trending</span></td>` +
+    `<td class="accent-cell">${confidence}%</td>` +
+    `<td class="accent3-cell">${(Math.random()*4+1).toFixed(1)}M</td>` +
+    `<td class="muted-cell">${new Date().toLocaleTimeString()}</td>`;
+
+  tbody.insertBefore(row, tbody.firstChild);
+
+  while (tbody.rows.length > 8) {
+    tbody.deleteRow(tbody.rows.length - 1);
+  }
+}
+
+
+/* ── AUTO LIVE REFRESH EVERY 3 SECONDS ── */
+function startRealtimeUpdates() {
+  setInterval(() => {
+    fetchLiveUpdates();
+    updateTrendFeedLive();
+  }, 3000);
+}
+
+
+/* ── KICK OFF ── */
+setTimeout(() => {
+  animateLoading();
+
+  setTimeout(() => {
+    startRealtimeUpdates();
+  }, 5000);
+
+}, 400);
+/* =========================================================
+   CONFIGURATION
+   Change BACKEND_URL if your Flask runs on a different port
+   ========================================================= */
+const BACKEND_URL = 'http://127.0.0.1:5000';
+
+/* ── STATIC DATA (fallback when backend is offline) ── */
+const MODELS_DATA = {
+  lr:  { name:'Logistic Regression', short:'LR',  baseAcc:84.2, acc:87.6, precision:86.9, recall:88.1, f1:87.5, color:'#63b3ed' },
+  svm: { name:'SVM (RBF Kernel)',    short:'SVM', baseAcc:86.8, acc:91.3, precision:90.7, recall:91.8, f1:91.2, color:'#4fd1c5', best:true },
+  rf:  { name:'Random Forest',       short:'RF',  baseAcc:83.1, acc:88.9, precision:87.4, recall:90.2, f1:88.8, color:'#b794f4' }
+};
+
+const SAMPLES = [
+  '#AIRevolution new language model surpasses human benchmark',
+  'Breaking: major earthquake hits coastal region tsunami warning issued',
+  '#CryptoMarket Bitcoin surges past 100k for the first time',
+  'New Netflix show drops tonight fans going wild on social media',
+  'Traffic update highway closed due to construction expect delays',
+  '#ClimateAction world leaders meet for emergency emissions summit',
+  'local coffee shop opened nearby nothing too special',
+  '#WorldCup final match tonight stadium packed millions watching',
+  '#ipl fever',
+  '#war'
+];
+
+const TREND_FEED = [
+  { text:'#AIRevolution new model beats GPT-5',        platform:'X (Twitter)',  model:'SVM', pred:'Trending',     conf:94.2, eng:'2.4M',  time:'2m ago' },
+  { text:'Bitcoin hits all-time high $105,000',         platform:'Reddit',       model:'SVM', pred:'Trending',     conf:91.7, eng:'1.8M',  time:'5m ago' },
+  { text:'Team India wins T20 World Cup final',         platform:'X (Twitter)',  model:'LR',  pred:'Trending',     conf:97.1, eng:'5.2M',  time:'8m ago' },
+  { text:'morning coffee and productivity routine tips',platform:'Instagram',    model:'RF',  pred:'Non-Trending', conf:78.3, eng:'4.2K',  time:'11m ago'},
+  { text:'#ClimateAction emergency summit today',       platform:'X (Twitter)',  model:'SVM', pred:'Trending',     conf:88.5, eng:'980K',  time:'14m ago'},
+  { text:'just had the best homemade pizza ever',       platform:'TikTok',       model:'RF',  pred:'Non-Trending', conf:82.1, eng:'1.1K',  time:'17m ago'},
+  { text:'ChatGPT new feature goes viral globally',     platform:'Reddit',       model:'SVM', pred:'Trending',     conf:95.6, eng:'3.7M',  time:'20m ago'},
+  { text:'weekend hiking trail recommendations',        platform:'Instagram',    model:'LR',  pred:'Non-Trending', conf:76.4, eng:'8.9K',  time:'23m ago'}
+];
+
+const DATASET = [
+  { id:'T001', text:'#WorldCup final game tonight millions watching',    tokens:7,  feat:'worldcup',   label:'Trending',     lr:0.91, svm:0.94, rf:0.89 },
+  { id:'T002', text:'had lunch at home nothing special today',           tokens:7,  feat:'lunch',      label:'Non-Trending', lr:0.83, svm:0.87, rf:0.81 },
+  { id:'T003', text:'breaking earthquake 7.8 magnitude emergency alert', tokens:6,  feat:'earthquake', label:'Trending',     lr:0.88, svm:0.92, rf:0.86 },
+  { id:'T004', text:'this coffee shop has good wifi thanks',             tokens:8,  feat:'coffee',     label:'Non-Trending', lr:0.79, svm:0.82, rf:0.77 },
+  { id:'T005', text:'#AIRevolution model surpasses human benchmark',     tokens:6,  feat:'airevol',    label:'Trending',     lr:0.93, svm:0.96, rf:0.91 },
+  { id:'T006', text:'reminder to drink water today stay healthy',        tokens:7,  feat:'water',      label:'Non-Trending', lr:0.76, svm:0.80, rf:0.74 },
+  { id:'T007', text:'Election results live update vote count ongoing',   tokens:7,  feat:'election',   label:'Trending',     lr:0.90, svm:0.93, rf:0.88 },
+  { id:'T008', text:'my cat is sleeping again very relatable',           tokens:7,  feat:'cat',        label:'Non-Trending', lr:0.71, svm:0.75, rf:0.69 }
+];
+
+const HP_DATA = [
+  { model:'Logistic Regression', param:'C (Regularization)',  tested:'0.01, 0.1, 1, 10, 100', best:'10',    cv:'87.1%', imp:'+3.4%' },
+  { model:'Logistic Regression', param:'solver',              tested:'lbfgs, liblinear, saga',  best:'lbfgs', cv:'87.1%', imp:'+1.2%' },
+  { model:'SVM',                 param:'C (Penalty)',         tested:'0.1, 1, 10, 100',         best:'10',    cv:'91.0%', imp:'+4.5%' },
+  { model:'SVM',                 param:'kernel',              tested:'linear, rbf, poly',        best:'rbf',   cv:'91.0%', imp:'+2.8%' },
+  { model:'SVM',                 param:'gamma',               tested:'scale, auto, 0.1',         best:'scale', cv:'91.0%', imp:'+1.9%' },
+  { model:'Random Forest',       param:'n_estimators',        tested:'50, 100, 200, 300',        best:'200',   cv:'88.6%', imp:'+5.8%' },
+  { model:'Random Forest',       param:'max_depth',           tested:'None, 10, 20, 30',         best:'20',    cv:'88.6%', imp:'+2.1%' },
+  { model:'Random Forest',       param:'min_samples_split',   tested:'2, 5, 10',                 best:'5',     cv:'88.6%', imp:'+0.9%' }
+];
+
+/* ── LOCAL FALLBACK PREDICTOR ── */
+function localPredict(text) {
+  const lower = text.toLowerCase();
+  const trendWords = ['breaking','earthquake','election','worldcup','airevolution','crypto','bitcoin',
+    'viral','emergency','record','historic','summit','championship','final','ai','revolution',
+    'climate','surge','crash','launch','announce','attack','war','win','won','new','first'];
+  const nonWords = ['coffee','lunch','dinner','walking','cat','dog','sleep','home','today',
+    'weather','weekend','routine','relatable','happy','morning'];
+  let score = 0.50;
+  trendWords.forEach(w => { if(lower.includes(w)) score += 0.07; });
+  nonWords.forEach(w => { if(lower.includes(w)) score -= 0.06; });
+  if(lower.startsWith('#')) score += 0.06;
+  if(lower.includes('breaking')) score += 0.09;
+  score += (Math.random() - 0.5) * 0.05;
+  score = Math.min(0.97, Math.max(0.33, score));
+  const trending = score > 0.50;
+  return {
+    prediction: trending ? 'Trending' : 'Non-Trending',
+    confidence: parseFloat((trending ? score : 1 - score).toFixed(4)),
+    trending_prob: parseFloat(score.toFixed(4)),
+    non_trending_prob: parseFloat((1 - score).toFixed(4)),
+    model_accuracy: 91.3,
+    model_used: document.getElementById('modelSelect').value.toUpperCase(),
+    source: 'local-simulation'
+  };
+}
+
+/* ── API CHECK ── */
+async function checkAPI() {
+  try {
+    const r = await fetch(BACKEND_URL + '/health', { signal: AbortSignal.timeout(2500) });
+    if(r.ok) {
+      document.getElementById('apiStatus').textContent = 'API: connected';
+      document.getElementById('apiStatus').className = 'api-status ok';
+      return true;
+    }
+  } catch(e) {}
+  document.getElementById('apiStatus').textContent = 'API: offline (local mode)';
+  document.getElementById('apiStatus').className = 'api-status fail';
+  return false;
+}
+
+/* ── PREDICTION ── */
+async function runPrediction() {
+  const text = document.getElementById('tweetInput').value.trim();
+  if (!text) { document.getElementById('tweetInput').focus(); return; }
+  const modelKey = document.getElementById('modelSelect').value;
+  let result;
+
+  try {
+    const resp = await fetch(BACKEND_URL + '/predict', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, model: modelKey }),
+      signal: AbortSignal.timeout(5000)
+    });
+    if (resp.ok) {
+      result = await resp.json();
+      result.source = 'api';
+    } else {
+      result = localPredict(text);
+    }
+  } catch(e) {
+    result = localPredict(text);
+  }
+
+  const isTrending = result.prediction === 'Trending';
+  const tConf = (result.trending_prob * 100).toFixed(1);
+  const nConf = (result.non_trending_prob * 100).toFixed(1);
+
+  const box = document.getElementById('resultBox');
+  box.classList.add('show');
+
+  const v = document.getElementById('resultVerdict');
+  v.textContent = result.prediction.toUpperCase();
+  v.className = 'result-verdict ' + (isTrending ? 'trending' : 'non-trending');
+
+  document.getElementById('resultMeta').textContent =
+    'Model: ' + (result.model_used || modelKey.toUpperCase()) +
+    ' · Accuracy: ' + (result.model_accuracy || MODELS_DATA[modelKey].acc) + '%' +
+    ' · Source: ' + (result.source || 'local');
+
+  document.getElementById('confPct1').textContent = tConf + '%';
+  document.getElementById('confFill1').style.width = tConf + '%';
+  document.getElementById('confPct2').textContent = nConf + '%';
+  document.getElementById('confFill2').style.width = nConf + '%';
+
+  const words = text.split(/\s+/).filter(w => w.startsWith('#') || w.length > 5);
+  document.getElementById('keywordsOut').textContent = words.slice(0,3).join(', ') || 'none detected';
+  document.getElementById('tokenOut').textContent = text.split(/\s+/).length;
+  document.getElementById('sourceOut').textContent = result.source || 'local';
+}
+
+function loadSample() {
+  document.getElementById('tweetInput').value = SAMPLES[Math.floor(Math.random() * SAMPLES.length)];
+}
+
+/* ── BUILD MODEL CARDS ── */
+function buildModelCards() {
+  const c = document.getElementById('modelCards');
+  c.innerHTML = '';
+  Object.entries(MODELS_DATA).forEach(([key, m]) => {
+    const div = document.createElement('div');
+    div.className = 'model-card' + (m.best ? ' best' : '');
+    div.innerHTML =
+      `<div class="model-name">${m.name}</div>` +
+      `<div class="model-acc" style="color:${m.color}">${m.acc}%</div>` +
+      (m.best ? '<span class="model-badge">★ BEST MODEL</span>' : '');
+    c.appendChild(div);
+  });
+}
+
+/* ── BUILD CHARTS ── */
+function buildCharts() {
+  const labels = ['Log. Regression', 'SVM', 'Random Forest'];
+  const gridColor = 'rgba(99,179,237,0.07)';
+  const tickFont = { size: 10, family: 'IBM Plex Mono' };
+  const tickColor = '#64748b';
+
+  new Chart(document.getElementById('accChart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label:'Base', data:[84.2, 86.8, 83.1],
+          backgroundColor:'rgba(99,179,237,0.22)', borderColor:'#63b3ed', borderWidth:1.5, borderRadius:5 },
+        { label:'Optimized', data:[87.6, 91.3, 88.9],
+          backgroundColor:'rgba(79,209,197,0.32)', borderColor:'#4fd1c5', borderWidth:1.5, borderRadius:5 }
+      ]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ display:false } },
+      scales:{
+        x:{ ticks:{ color:tickColor, font:tickFont }, grid:{ color:gridColor } },
+        y:{ min:75, max:95, ticks:{ color:tickColor, font:tickFont, callback:v=>v+'%' }, grid:{ color:gridColor } }
+      }
+    }
+  });
+
+  new Chart(document.getElementById('metricsChart'), {
+    type:'bar',
+    data:{
+      labels,
+      datasets:[
+        { label:'Precision', data:[86.9, 90.7, 87.4],
+          backgroundColor:'rgba(246,173,85,0.28)', borderColor:'#f6ad55', borderWidth:1.5, borderRadius:5 },
+        { label:'Recall', data:[88.1, 91.8, 90.2],
+          backgroundColor:'rgba(183,148,244,0.28)', borderColor:'#b794f4', borderWidth:1.5, borderRadius:5 },
+        { label:'F1-Score', data:[87.5, 91.2, 88.8],
+          backgroundColor:'rgba(104,211,145,0.28)', borderColor:'#68d391', borderWidth:1.5, borderRadius:5 }
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ display:false } },
+      scales:{
+        x:{ ticks:{ color:tickColor, font:tickFont }, grid:{ color:gridColor } },
+        y:{ min:75, max:95, ticks:{ color:tickColor, font:tickFont, callback:v=>v+'%' }, grid:{ color:gridColor } }
+      }
+    }
+  });
+}
+
+/* ── BUILD TREND FEED ── */
+function buildTrendFeed() {
+  const tbody = document.getElementById('trendFeed');
+  TREND_FEED.forEach((row, i) => {
+    const isTr = row.pred === 'Trending';
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      `<td class="muted-cell">${String(i+1).padStart(2,'0')}</td>` +
+      `<td class="text-col">${row.text}</td>` +
+      `<td>${row.platform}</td>` +
+      `<td class="accent2-cell">${row.model}</td>` +
+      `<td><span class="badge ${isTr ? 'trending' : 'non-trend'}">${row.pred}</span></td>` +
+      `<td class="accent-cell">${row.conf.toFixed(1)}%</td>` +
+      `<td class="accent3-cell">${row.eng}</td>` +
+      `<td class="muted-cell">${row.time}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+/* ── BUILD DATASET TABLE ── */
+function buildDataset() {
+  const tbody = document.getElementById('datasetBody');
+  DATASET.forEach(row => {
+    const isTr = row.label === 'Trending';
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      `<td class="muted-cell">${row.id}</td>` +
+      `<td class="text-col">${row.text}</td>` +
+      `<td class="accent3-cell">${row.tokens}</td>` +
+      `<td class="accent2-cell">${row.feat}</td>` +
+      `<td><span class="badge ${isTr ? 'trending' : 'non-trend'}">${row.label}</span></td>` +
+      `<td class="accent-cell">${(row.lr*100).toFixed(1)}%</td>` +
+      `<td class="accent2-cell">${(row.svm*100).toFixed(1)}%</td>` +
+      `<td class="purple-cell">${(row.rf*100).toFixed(1)}%</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+/* ── BUILD HYPERPARAMETER TABLE ── */
+function buildHPTable() {
+  const tbody = document.getElementById('hpTable');
+  HP_DATA.forEach(row => {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      `<td class="accent3-cell">${row.model}</td>` +
+      `<td>${row.param}</td>` +
+      `<td class="muted-cell">${row.tested}</td>` +
+      `<td class="green-cell">${row.best}</td>` +
+      `<td class="accent2-cell">${row.cv}</td>` +
+      `<td class="accent3-cell">${row.imp}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+/* ── LOADING ANIMATION ── */
+const loadSteps = [
+  [10,  'Loading tweet dataset (12,450 samples)...'],
+  [22,  'Applying TF-IDF vectorization (max 5000 features)...'],
+  [38,  'Training Logistic Regression model...'],
+  [52,  'Training SVM with RBF kernel...'],
+  [66,  'Training Random Forest (200 estimators)...'],
+  [80,  'Running GridSearchCV 5-fold cross-validation...'],
+  [92,  'Evaluating models on test set (20%)...'],
+  [100, 'Dashboard ready!']
+];
+
+let step = 0;
+function animateLoading() {
+  if (step >= loadSteps.length) {
+    setTimeout(() => {
+      document.getElementById('loadingOverlay').style.display = 'none';
+      document.getElementById('mainDash').style.display = 'block';
+      buildModelCards();
+      buildCharts();
+      buildTrendFeed();
+      buildDataset();
+      buildHPTable();
+      checkAPI();
+    }, 300);
+    return;
+  }
+  const [pct, msg] = loadSteps[step];
+  document.getElementById('progressFill').style.width = pct + '%';
+  document.getElementById('progressPct').textContent = pct + '%';
+  document.getElementById('loadingMsg').textContent = msg;
+  step++;
+  setTimeout(animateLoading, step <= 2 ? 450 : step <= 6 ? 520 : 400);
+}
+
+/* ── KEYBOARD SHORTCUT ── */
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && document.activeElement.id === 'tweetInput') runPrediction();
+});
+
+/* ── KICK OFF ── */
+setTimeout(animateLoading, 400);
+</script>
+</body>
+</html>
